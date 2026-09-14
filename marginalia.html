@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marginalia — Spaced Repetition Study Companion</title>
+<meta name="description" content="A browser-based flashcard and focus companion that schedules your reviews with spaced repetition, runs a Pomodoro timer, and tracks your study streak. Nothing leaves your device.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#182430;
+    --navy-deep:#111a23;
+    --navy-soft:#22323f;
+    --navy-line: rgba(230,222,201,0.14);
+    /* dark theme is the default surface: cards read as index cards under lamplight */
+    --paper:#262b33;
+    --paper-dim:#1d222a;
+    --paper-edge:#3a414c;
+    --paper-alt:#2e3540;
+    --ink:#eee7d6;
+    --ink-soft:#9aa4ad;
+    --brass:#c99a3f;
+    --brass-deep:#a87c2a;
+    --stamp:#a4453f;
+    --stamp-soft:#c97570;
+    --leaf:#4c7a63;
+    --leaf-soft:#7fa891;
+    --focus-ring: #e8c96b;
+    --radius-card: 3px;
+    --shadow-card: 0 1px 0 rgba(0,0,0,0.4), 0 10px 26px -12px rgba(0,0,0,0.7);
+    font-size: 16px;
+  }
+
+  html[data-theme="light"]{
+    --navy:#f6f1e4;
+    --navy-deep:#efe8d6;
+    --navy-soft:#e9e1cd;
+    --navy-line: rgba(43,38,32,0.14);
+    --paper:#fbf7ec;
+    --paper-dim:#f0e9d6;
+    --paper-edge:#dccfa9;
+    --paper-alt:#efe6cd;
+    --ink:#2b2620;
+    --ink-soft:#6c6350;
+    --shadow-card: 0 1px 0 rgba(120,100,60,0.18), 0 10px 22px -12px rgba(80,65,40,0.28);
+  }
+  html[data-theme="light"] body{
+    background: radial-gradient(1200px 800px at 15% -10%, #f3ecd9 0%, transparent 60%), var(--navy);
+  }
+  html[data-theme="light"] .rail{ background: linear-gradient(180deg, #efe8d6, #e6ddc4); }
+  html[data-theme="light"] .wordmark .m,
+  html[data-theme="light"] .drawer-btn,
+  html[data-theme="light"] .page-title{ color: #2b2620; }
+  html[data-theme="light"] p.page-lede{ color:#5c5648; }
+  html[data-theme="light"] .drawer-btn{ background: #f3ecd9; }
+  html[data-theme="light"] .drawer-btn:hover{ background:#ece2c6; }
+  html[data-theme="light"] .drawer-btn[aria-current="page"]{ background:#e6d8b2; }
+  html[data-theme="light"] .rail-foot,
+  html[data-theme="light"] .study-progress,
+  html[data-theme="light"] .flip-hint,
+  html[data-theme="light"] .timer-mode,
+  html[data-theme="light"] .log-row,
+  html[data-theme="light"] .back-link{ color:#5c5648; }
+  html[data-theme="light"] .btn.ghost{ color:#2b2620; border-color:#c9bb92; }
+
+  /* absolute black / OLED theme */
+  html[data-theme="black"]{
+    --navy:#000000;
+    --navy-deep:#000000;
+    --navy-soft:#0c0c0c;
+    --navy-line: rgba(255,255,255,0.12);
+    --paper:#0a0a0a;
+    --paper-dim:#050505;
+    --paper-edge:#232323;
+    --paper-alt:#111111;
+    --ink:#f2f2f0;
+    --ink-soft:#8a8a86;
+    --shadow-card: 0 0 0 1px rgba(255,255,255,0.06), 0 14px 30px -14px rgba(0,0,0,0.9);
+  }
+  html[data-theme="black"] body{ background:#000000; }
+  html[data-theme="black"] .rail{ background:#000000; border-right-color: var(--navy-line); }
+  html[data-theme="black"] .drawer-btn{ background:#0c0c0c; border-color: var(--navy-line); }
+  html[data-theme="black"] .drawer-btn:hover{ background:#161616; }
+  html[data-theme="black"] .drawer-btn[aria-current="page"]{ background:#191919; }
+  html[data-theme="black"] .card::before{ background: repeating-linear-gradient(90deg, var(--paper-edge) 0 2px, transparent 2px 6px); }
+  html[data-theme="black"] .theme-toggle{ background:#0c0c0c; border-color: var(--navy-line); }
+  html[data-theme="black"] .theme-toggle:hover{ background:#161616; }
+  html[data-theme="black"] .new-deck-card{ border-color:#2a2a2a; }
+
+  *{ box-sizing: border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 800px at 15% -10%, #203040 0%, transparent 60%),
+      var(--navy);
+    color: var(--paper);
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono{ font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  a{ color: inherit; }
+  button{ font-family: inherit; }
+  ::selection{ background: var(--brass); color: var(--navy-deep); }
+
+  :focus-visible{
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* ---------- App shell ---------- */
+  .app{
+    display:grid;
+    grid-template-columns: 232px 1fr;
+    min-height: 100vh;
+  }
+
+  .rail{
+    background: linear-gradient(180deg, var(--navy-deep), #0d151c);
+    border-right: 1px solid var(--navy-line);
+    padding: 28px 18px;
+    display:flex;
+    flex-direction:column;
+    gap: 30px;
+    position: sticky;
+    top:0;
+    height: 100vh;
+  }
+  .wordmark{
+    display:flex;
+    flex-direction: column;
+    gap:2px;
+    padding: 0 6px;
+  }
+  .wordmark .m{
+    font-size: 1.7rem;
+    font-style: italic;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--paper);
+  }
+  .wordmark .sub{
+    font-size: 0.72rem;
+    color: var(--brass);
+    font-family: "IBM Plex Mono", monospace;
+    letter-spacing: 0.03em;
+  }
+
+  nav.drawers{
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+  .drawer-btn{
+    display:flex;
+    align-items:center;
+    gap: 12px;
+    width:100%;
+    text-align:left;
+    background: var(--navy-soft);
+    border: 1px solid var(--navy-line);
+    border-left: 3px solid transparent;
+    color: var(--paper);
+    padding: 12px 12px;
+    border-radius: 2px;
+    cursor:pointer;
+    font-size: 0.95rem;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .drawer-btn .handle{
+    width:9px; height:9px; border-radius:50%;
+    background: var(--brass-deep);
+    flex-shrink:0;
+    box-shadow: inset 0 1px 1px rgba(0,0,0,0.4);
+  }
+  .drawer-btn .count{
+    margin-left:auto;
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    background: var(--paper-dim);
+    color: var(--ink);
+    border-radius: 10px;
+    padding: 1px 7px;
+    min-width: 20px;
+    text-align:center;
+  }
+  .drawer-btn:hover{ background:#2a3c4a; }
+  .drawer-btn[aria-current="page"]{
+    border-left-color: var(--brass);
+    background: #2c4053;
+  }
+  .drawer-btn[aria-current="page"] .count{ background: var(--brass); color: var(--navy-deep); }
+
+  .rail-foot{
+    margin-top:auto;
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    line-height:1.5;
+    font-family: "IBM Plex Mono", monospace;
+    padding: 0 6px;
+  }
+  .rail-foot button{
+    background:none;border:none;color:var(--brass);
+    text-decoration: underline;
+    cursor:pointer;
+    padding:0;
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  main{
+    padding: 40px 44px 100px;
+    max-width: 980px;
+  }
+
+  .view{ display:none; }
+  .view.active{ display:block; animation: rise 260ms ease; }
+  @media (prefers-reduced-motion: reduce){ .view.active{ animation:none; } }
+  @keyframes rise{ from{ opacity:0; transform: translateY(6px);} to{opacity:1; transform:none;} }
+
+  h1.page-title{
+    font-size: 2rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: var(--paper);
+  }
+  p.page-lede{
+    color: #b9c3cc;
+    margin: 0 0 30px;
+    max-width: 62ch;
+    line-height: 1.6;
+  }
+
+  /* ---------- Index cards ---------- */
+  .card{
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    position: relative;
+  }
+  .card::before{
+    content:"";
+    position:absolute; left:0; right:0; top:0;
+    height:5px;
+    background: repeating-linear-gradient(90deg, var(--paper-edge) 0 2px, transparent 2px 6px);
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
+
+  .deck-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 16px;
+    margin-bottom: 34px;
+  }
+  .deck-card{
+    padding: 18px 18px 16px;
+    cursor:pointer;
+    border:none;
+    text-align:left;
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+  .deck-card:hover{ transform: translateY(-2px); }
+  .deck-card{ transition: transform 120ms ease; }
+  .deck-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .deck-name{ font-size: 1.12rem; font-weight:600; line-height:1.3; }
+  .deck-tab{
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 0.68rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.03em;
+  }
+  .deck-stats{ display:flex; gap:14px; font-family:"IBM Plex Mono", monospace; font-size:0.76rem; color: var(--ink-soft); }
+  .deck-stats b{ color: var(--ink); font-weight:600; }
+  .due-badge{
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    background: var(--stamp);
+    color: #fbeee9;
+    padding: 2px 8px;
+    border-radius: 10px;
+    align-self:flex-start;
+  }
+  .due-badge.zero{ background: var(--leaf); color:#eef7f1; }
+
+  .new-deck-card{
+    display:flex; align-items:center; justify-content:center;
+    border: 1.5px dashed var(--navy-line);
+    background: transparent;
+    color: #9fb0bd;
+    border-radius: var(--radius-card);
+    min-height: 96px;
+    cursor:pointer;
+    font-size: 0.95rem;
+    transition: border-color 120ms ease, color 120ms ease;
+  }
+  .new-deck-card:hover{ border-color: var(--brass); color: var(--brass); }
+
+  /* ---------- Forms ---------- */
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
+  .field label{ font-size:0.82rem; color:#c7d0d8; font-family:"IBM Plex Mono", monospace; }
+  input[type=text], input[type=number], textarea, select{
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--paper-edge);
+    border-radius: 2px;
+    padding: 10px 12px;
+    font-family: "Source Serif 4", serif;
+    font-size: 1rem;
+  }
+  textarea{ resize: vertical; min-height: 90px; font-family:"IBM Plex Mono", monospace; font-size:0.86rem; line-height:1.5; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    background: var(--brass);
+    color: var(--navy-deep);
+    border:none;
+    padding: 10px 18px;
+    border-radius: 2px;
+    font-weight:600;
+    font-size: 0.92rem;
+    cursor:pointer;
+    transition: background 120ms ease, transform 80ms ease;
+  }
+  .btn:hover{ background:#dbaf52; }
+  .btn:active{ transform: translateY(1px); }
+  .btn.ghost{
+    background: transparent;
+    color: var(--paper);
+    border: 1px solid var(--navy-line);
+  }
+  .btn.ghost:hover{ border-color: var(--brass); color: var(--brass); background:transparent; }
+  .btn.danger{ background: var(--stamp); color:#fdecea; }
+  .btn.danger:hover{ background:#b85852; }
+  .btn.small{ padding: 6px 12px; font-size:0.8rem; }
+  .btn:disabled{ opacity:0.45; cursor:not-allowed; }
+
+  .row{ display:flex; gap:12px; flex-wrap:wrap; }
+  .row.between{ justify-content:space-between; align-items:center; }
+
+  dialog{
+    border:none; border-radius: 4px; padding:0;
+    background: var(--paper); color: var(--ink);
+    width: min(520px, 92vw);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+  }
+  dialog::backdrop{ background: rgba(10,15,20,0.6); }
+  .dialog-body{ padding: 26px 26px 22px; }
+  .dialog-body h2{ margin-top:0; font-size:1.3rem; }
+
+  /* ---------- Deck detail ---------- */
+  .back-link{
+    background:none; border:none; color:#9fb0bd; cursor:pointer;
+    font-family:"IBM Plex Mono", monospace; font-size:0.8rem;
+    padding:0; margin-bottom: 18px; display:inline-flex; gap:6px; align-items:center;
+  }
+  .back-link:hover{ color: var(--brass); }
+
+  .card-row{
+    display:flex; align-items:flex-start; gap:14px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--paper-edge);
+  }
+  .card-row:last-child{ border-bottom:none; }
+  .card-row .front{ font-weight:600; }
+  .card-row .back{ color: var(--ink-soft); font-size:0.92rem; }
+  .card-row .txts{ flex:1; min-width:0; }
+  .card-row .meta{
+    font-family:"IBM Plex Mono", monospace; font-size:0.7rem; color: var(--ink-soft);
+    white-space:nowrap;
+  }
+  .icon-btn{
+    background:none; border:none; cursor:pointer; color: var(--ink-soft);
+    padding:4px; border-radius:3px; line-height:0;
+  }
+  .icon-btn:hover{ color: var(--stamp); }
+
+  .empty{
+    padding: 44px 20px; text-align:center; color: var(--ink-soft);
+  }
+
+  /* ---------- Study view ---------- */
+  .study-wrap{ display:flex; flex-direction:column; align-items:center; gap: 22px; }
+  .study-progress{
+    width:100%; max-width: 480px;
+    font-family:"IBM Plex Mono", monospace; font-size:0.78rem; color:#9fb0bd;
+    display:flex; justify-content:space-between;
+  }
+  .flip-card{
+    width: 100%; max-width: 480px;
+    height: 280px;
+    perspective: 1400px;
+    cursor:pointer;
+  }
+  .flip-inner{
+    position:relative; width:100%; height:100%;
+    transform-style: preserve-3d;
+    transition: transform 420ms cubic-bezier(.4,.2,.2,1);
+  }
+  @media (prefers-reduced-motion: reduce){ .flip-inner{ transition:none; } }
+  .flip-card.flipped .flip-inner{ transform: rotateY(180deg); }
+  .face{
+    position:absolute; inset:0;
+    backface-visibility: hidden;
+    border-radius: 6px;
+    display:flex; align-items:center; justify-content:center;
+    text-align:center;
+    padding: 32px;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: var(--shadow-card);
+    font-size: 1.4rem;
+    line-height:1.5;
+  }
+  .face .tag{
+    position:absolute; top:14px; left:18px;
+    font-family:"IBM Plex Mono", monospace; font-size:0.68rem; color: var(--ink-soft);
+    letter-spacing:0.04em;
+  }
+  .face.back{ transform: rotateY(180deg); background: var(--paper-alt); }
+  .flip-hint{ font-size:0.8rem; color:#8998a3; font-family:"IBM Plex Mono", monospace; }
+
+  .rate-row{ display:grid; grid-template-columns: repeat(4,1fr); gap:10px; width:100%; max-width:480px; }
+  .rate-btn{
+    border:none; border-radius:3px; padding: 12px 6px; cursor:pointer;
+    font-weight:600; font-size:0.85rem; color:#fff;
+    display:flex; flex-direction:column; gap:2px; align-items:center;
+  }
+  .rate-btn small{ font-weight:400; opacity:0.85; font-size:0.68rem; font-family:"IBM Plex Mono", monospace; }
+  .rate-again{ background:#8a3a37; }
+  .rate-hard{ background:#a06a2c; }
+  .rate-good{ background:#3f6e57; }
+  .rate-easy{ background:#2d6b8f; }
+  .rate-btn:hover{ filter: brightness(1.12); }
+
+  .session-done{
+    text-align:center; padding: 60px 20px;
+  }
+  .session-done .big{ font-size:3rem; margin-bottom:6px; }
+
+  /* ---------- Focus timer ---------- */
+  .timer-wrap{ display:flex; flex-direction:column; align-items:center; gap:24px; padding: 20px 0 10px; }
+  .timer-face{
+    width: 260px; height:260px; border-radius:50%;
+    background: var(--paper);
+    color: var(--ink);
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    box-shadow: var(--shadow-card);
+    position:relative;
+  }
+  .timer-ring{ position:absolute; inset:0; transform: rotate(-90deg); }
+  .timer-digits{ font-family:"IBM Plex Mono", monospace; font-size:2.6rem; font-weight:600; z-index:1; }
+  .timer-mode{ font-family:"IBM Plex Mono", monospace; font-size:0.75rem; color: var(--ink-soft); text-transform:lowercase; z-index:1; margin-top:4px; }
+  .timer-controls{ display:flex; gap:12px; }
+  .timer-settings{ display:flex; gap:18px; flex-wrap:wrap; justify-content:center; }
+  .timer-settings .field{ width:110px; margin-bottom:0; }
+  .timer-settings input{ text-align:center; }
+  .session-log-title{ margin-top: 46px; }
+  .log-list{ display:flex; flex-direction:column; gap:6px; }
+  .log-row{
+    display:flex; justify-content:space-between;
+    font-family:"IBM Plex Mono", monospace; font-size:0.82rem;
+    color:#c7d0d8; border-bottom:1px dashed var(--navy-line); padding:6px 2px;
+  }
+
+  /* ---------- Ledger ---------- */
+  .stat-grid{
+    display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
+    gap:14px; margin-bottom: 34px;
+  }
+  .stat-card{ padding: 16px 18px; }
+  .stat-card .num{ font-size:2rem; font-weight:700; font-family:"IBM Plex Mono", monospace; line-height:1; }
+  .stat-card .lbl{ font-size:0.78rem; color: var(--ink-soft); margin-top:6px; }
+
+  .chart-card{ padding: 22px 22px 16px; margin-bottom: 30px; }
+  .chart-card h3{ margin-top:0; font-size:1rem; }
+  .bars{ display:flex; align-items:flex-end; gap: 10px; height:140px; margin-top:14px; }
+  .bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end; }
+  .bar{ width:100%; max-width:34px; background: var(--brass); border-radius: 2px 2px 0 0; min-height:2px; }
+  .bar-col .day-lbl{ font-family:"IBM Plex Mono", monospace; font-size:0.64rem; color: var(--ink-soft); }
+
+  .data-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+
+  /* ---------- Bottom nav (mobile) ---------- */
+  .bottom-nav{ display:none; }
+
+  @media (max-width: 860px){
+    .app{ grid-template-columns: 1fr; }
+    .rail{ display:none; }
+    main{ padding: 24px 18px 96px; }
+    .bottom-nav{
+      display:flex; position:fixed; bottom:0; left:0; right:0;
+      background: var(--navy-deep); border-top:1px solid var(--navy-line);
+      justify-content: space-around; padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+      z-index: 20;
+    }
+    .bottom-nav button{
+      background:none; border:none; color:#9fb0bd; display:flex; flex-direction:column;
+      align-items:center; gap:3px; font-size:0.65rem; font-family:"IBM Plex Mono", monospace;
+      padding:4px 10px; cursor:pointer; border-radius:6px;
+    }
+    .bottom-nav button[aria-current="page"]{ color: var(--brass); }
+    .wordmark-mobile{
+      display:flex; align-items:baseline; gap:8px; margin-bottom: 22px;
+    }
+    .wordmark-mobile .m{ font-size:1.4rem; font-style:italic; font-weight:600; }
+    .wordmark-mobile .sub{ font-family:"IBM Plex Mono", monospace; font-size:0.68rem; color: var(--brass); }
+  }
+  @media (min-width:861px){ .wordmark-mobile{ display:none; } }
+
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+
+  .toast{
+    position:fixed; bottom: 24px; left:50%; transform: translateX(-50%);
+    background: var(--navy-deep); border:1px solid var(--brass); color:var(--paper);
+    padding: 10px 18px; border-radius: 4px; font-size:0.85rem; z-index:50;
+    opacity:0; pointer-events:none; transition: opacity 200ms ease, transform 200ms ease;
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(-6px); }
+  @media (max-width:860px){ .toast{ bottom: 78px; } }
+
+  /* ---------- Theme toggle ---------- */
+  .theme-toggle{
+    position: fixed;
+    top: 18px; right: 20px;
+    z-index: 30;
+    display:flex; align-items:center; gap:8px;
+    background: var(--navy-soft);
+    border: 1px solid var(--navy-line);
+    color: var(--paper);
+    padding: 7px 13px;
+    border-radius: 20px;
+    cursor:pointer;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.76rem;
+    transition: background 120ms ease;
+  }
+  .theme-toggle:hover{ background:#2a3c4a; }
+  html[data-theme="light"] .theme-toggle{ color:#2b2620; background:#f3ecd9; border-color:#c9bb92; }
+  html[data-theme="light"] .theme-toggle:hover{ background:#ece2c6; }
+  .theme-toggle .dot{ width:8px; height:8px; border-radius:50%; background: var(--brass); }
+  @media (max-width:860px){ .theme-toggle{ top: 14px; right: 14px; padding:6px 11px; } }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" aria-label="Switch to absolute black theme">
+  <span class="dot" aria-hidden="true"></span><span id="themeToggleLabel">Dark theme</span>
+</button>
+
+<div class="app">
+  <aside class="rail" aria-label="Main navigation">
+    <div class="wordmark">
+      <span class="m">Marginalia</span>
+      <span class="sub">study companion</span>
+    </div>
+    <nav class="drawers" id="deskNav">
+      <button class="drawer-btn" data-view="catalog" aria-current="page"><span class="handle"></span>Catalog</button>
+      <button class="drawer-btn" data-view="study"><span class="handle"></span>Study<span class="count" id="deskDueCount">0</span></button>
+      <button class="drawer-btn" data-view="focus"><span class="handle"></span>Focus timer</button>
+      <button class="drawer-btn" data-view="ledger"><span class="handle"></span>Ledger</button>
+    </nav>
+    <div class="rail-foot">
+      Everything is stored only in this browser.<br>
+      <button id="exportBtnRail">Export backup</button> · <button id="importBtnRail">Import</button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="wordmark-mobile">
+      <span class="m">Marginalia</span>
+      <span class="sub">study companion</span>
+    </div>
+
+    <!-- CATALOG -->
+    <section class="view active" id="view-catalog" aria-labelledby="catalog-h">
+      <h1 class="page-title" id="catalog-h">Catalog</h1>
+      <p class="page-lede">Decks of cards, kept the way a librarian keeps a card catalog. Add a deck, fill it with terms, and Study will bring back the ones due for review.</p>
+      <div class="deck-grid" id="deckGrid"></div>
+    </section>
+
+    <!-- DECK DETAIL -->
+    <section class="view" id="view-deck" aria-labelledby="deck-h">
+      <button class="back-link" id="backToCatalog">&larr; back to catalog</button>
+      <h1 class="page-title" id="deck-h">Deck</h1>
+      <p class="page-lede" id="deck-sub"></p>
+
+      <div class="row" style="margin-bottom:20px;">
+        <button class="btn" id="openAddCard">+ Add card</button>
+        <button class="btn ghost" id="openBulkImport">Paste a list</button>
+        <button class="btn ghost" id="studyThisDeck">Study this deck</button>
+        <button class="btn danger" id="deleteDeckBtn" style="margin-left:auto;">Delete deck</button>
+      </div>
+
+      <div class="card" id="cardListWrap">
+        <div id="cardList"></div>
+      </div>
+    </section>
+
+    <!-- STUDY -->
+    <section class="view" id="view-study" aria-labelledby="study-h">
+      <h1 class="page-title" id="study-h">Study</h1>
+      <p class="page-lede" id="study-sub">Cards due for review, oldest first.</p>
+      <div id="studyArea"></div>
+    </section>
+
+    <!-- FOCUS -->
+    <section class="view" id="view-focus" aria-labelledby="focus-h">
+      <h1 class="page-title" id="focus-h">Focus timer</h1>
+      <p class="page-lede">A Pomodoro-style timer to pace your study sessions. Work, then rest, and it keeps a log of finished sessions below.</p>
+
+      <div class="timer-wrap">
+        <div class="timer-face">
+          <svg class="timer-ring" width="260" height="260" viewBox="0 0 260 260" aria-hidden="true">
+            <circle cx="130" cy="130" r="118" fill="none" stroke="#d8cba9" stroke-width="10"/>
+            <circle id="timerArc" cx="130" cy="130" r="118" fill="none" stroke="#c99a3f" stroke-width="10"
+              stroke-dasharray="741.5" stroke-dashoffset="0" stroke-linecap="round"/>
+          </svg>
+          <div class="timer-digits mono" id="timerDigits" aria-live="polite">25:00</div>
+          <div class="timer-mode" id="timerMode">focus session</div>
+        </div>
+        <div class="timer-controls">
+          <button class="btn" id="timerStart">Start</button>
+          <button class="btn ghost" id="timerReset">Reset</button>
+          <button class="btn ghost" id="timerSkip">Skip</button>
+        </div>
+        <div class="timer-settings">
+          <div class="field"><label for="workMin">Focus (min)</label><input type="number" id="workMin" min="1" max="120" value="25"></div>
+          <div class="field"><label for="breakMin">Short break</label><input type="number" id="breakMin" min="1" max="60" value="5"></div>
+          <div class="field"><label for="longBreakMin">Long break</label><input type="number" id="longBreakMin" min="1" max="90" value="15"></div>
+        </div>
+      </div>
+
+      <h3 class="session-log-title">Today's sessions</h3>
+      <div class="card" style="padding:16px 18px;">
+        <div class="log-list" id="sessionLog"></div>
+      </div>
+    </section>
+
+    <!-- LEDGER -->
+    <section class="view" id="view-ledger" aria-labelledby="ledger-h">
+      <h1 class="page-title" id="ledger-h">Ledger</h1>
+      <p class="page-lede">A running account of your study habit.</p>
+
+      <div class="stat-grid" id="statGrid"></div>
+
+      <div class="card chart-card">
+        <h3>Reviews, last 14 days</h3>
+        <div class="bars" id="reviewBars"></div>
+      </div>
+
+      <div class="card chart-card">
+        <h3>Focus minutes, last 14 days</h3>
+        <div class="bars" id="focusBars"></div>
+      </div>
+
+      <div class="card" style="padding:18px 20px;">
+        <h3 style="margin-top:0;">Your data</h3>
+        <p style="color:var(--ink-soft); font-size:0.88rem; margin-top:-8px;">Marginalia keeps everything in this browser's storage — nothing is sent anywhere. Export a backup before clearing your browser data, or to move to another device.</p>
+        <div class="data-actions">
+          <button class="btn ghost" id="exportBtn">Export backup (.json)</button>
+          <button class="btn ghost" id="importBtn">Import backup</button>
+          <input type="file" id="importFile" accept="application/json" class="sr-only">
+          <button class="btn danger" id="resetAllBtn">Erase all data</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="bottom-nav" id="mobileNav" aria-label="Main navigation">
+  <button data-view="catalog" aria-current="page">Catalog</button>
+  <button data-view="study">Study</button>
+  <button data-view="focus">Focus</button>
+  <button data-view="ledger">Ledger</button>
+</nav>
+
+<!-- Add / edit deck dialog -->
+<dialog id="deckDialog">
+  <form method="dialog" class="dialog-body" id="deckForm">
+    <h2 id="deckDialogTitle">New deck</h2>
+    <div class="field">
+      <label for="deckNameInput">Deck name</label>
+      <input type="text" id="deckNameInput" required maxlength="60" placeholder="e.g. Organic Chemistry — Ch. 4">
+    </div>
+    <div class="row" style="justify-content:flex-end;">
+      <button type="button" class="btn ghost" data-close>Cancel</button>
+      <button type="submit" class="btn">Save deck</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Add / edit card dialog -->
+<dialog id="cardDialog">
+  <form method="dialog" class="dialog-body" id="cardForm">
+    <h2 id="cardDialogTitle">New card</h2>
+    <div class="field">
+      <label for="cardFrontInput">Front (term or question)</label>
+      <textarea id="cardFrontInput" required style="min-height:60px;"></textarea>
+    </div>
+    <div class="field">
+      <label for="cardBackInput">Back (answer)</label>
+      <textarea id="cardBackInput" required style="min-height:60px;"></textarea>
+    </div>
+    <div class="row" style="justify-content:flex-end;">
+      <button type="button" class="btn ghost" data-close>Cancel</button>
+      <button type="submit" class="btn">Save card</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Bulk import dialog -->
+<dialog id="bulkDialog">
+  <form method="dialog" class="dialog-body" id="bulkForm">
+    <h2>Paste a list</h2>
+    <p style="font-size:0.85rem; color:var(--ink-soft); margin-top:-6px;">One card per line, front and back separated by <code>|</code>, <code>::</code>, or a tab. Example: <code>mitochondria | powerhouse of the cell</code></p>
+    <div class="field">
+      <label for="bulkInput" class="sr-only">Cards to import</label>
+      <textarea id="bulkInput" style="min-height:160px;" placeholder="term | definition&#10;another term | its definition"></textarea>
+    </div>
+    <div class="row" style="justify-content:flex-end;">
+      <button type="button" class="btn ghost" data-close>Cancel</button>
+      <button type="submit" class="btn">Import cards</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ theme ============ */
+  const THEME_KEY = "marginalia_theme";
+  const THEME_ORDER = ["dark", "black", "light"];
+  const THEME_LABEL = { dark: "Dark", black: "Absolute black", light: "Light" };
+  const themeToggle = document.getElementById("themeToggle");
+  const themeToggleLabel = document.getElementById("themeToggleLabel");
+  function applyTheme(theme){
+    if(!THEME_ORDER.includes(theme)) theme = "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_KEY, theme);
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(theme)+1) % THEME_ORDER.length];
+    themeToggle.setAttribute("aria-label", `Switch to ${THEME_LABEL[next].toLowerCase()} theme`);
+    themeToggleLabel.textContent = `${THEME_LABEL[theme]} theme`;
+  }
+  applyTheme(localStorage.getItem(THEME_KEY) || "black");
+  themeToggle.addEventListener("click", ()=>{
+    const current = document.documentElement.getAttribute("data-theme");
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(current)+1) % THEME_ORDER.length];
+    applyTheme(next);
+  });
+
+  /* ============ storage ============ */
+  const STORE_KEY = "marginalia_v1";
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + "-" + Math.random().toString(16).slice(2));
+  const todayStr = (d=new Date()) => d.toISOString().slice(0,10);
+  const dayDiff = (a,b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+
+  function defaultState(){
+    return {
+      decks: [],
+      cards: [],
+      reviewLog: [],   // {date:"YYYY-MM-DD", quality:0-5}
+      focusLog: [],    // {date:"YYYY-MM-DD", minutes:n}
+      settings: { work:25, short:5, long:15 }
+    };
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return defaultState();
+      const parsed = JSON.parse(raw);
+      return Object.assign(defaultState(), parsed);
+    }catch(e){
+      console.error("Could not read saved data, starting fresh.", e);
+      return defaultState();
+    }
+  }
+
+  let state = loadState();
+  function save(){
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  }
+
+  /* ============ toast ============ */
+  const toastEl = document.getElementById("toast");
+  let toastTimer = null;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> toastEl.classList.remove("show"), 2200);
+  }
+
+  /* ============ SM-2 spaced repetition ============ */
+  // quality: 0 = again, 3 = hard, 4 = good, 5 = easy
+  function schedule(card, quality){
+    let { repetition=0, ease=2.5, interval=0 } = card;
+    if(quality < 3){
+      repetition = 0;
+      interval = 1;
+    } else {
+      if(repetition === 0) interval = 1;
+      else if(repetition === 1) interval = 6;
+      else interval = Math.round(interval * ease);
+      repetition += 1;
+    }
+    ease = ease + (0.1 - (5-quality)*(0.08 + (5-quality)*0.02));
+    if(ease < 1.3) ease = 1.3;
+
+    const due = new Date();
+    due.setDate(due.getDate() + interval);
+
+    card.repetition = repetition;
+    card.ease = Math.round(ease*100)/100;
+    card.interval = interval;
+    card.due = todayStr(due);
+    card.lastReview = todayStr();
+    return card;
+  }
+
+  function isDue(card){
+    return !card.due || card.due <= todayStr();
+  }
+
+  /* ============ navigation ============ */
+  const views = {
+    catalog: document.getElementById("view-catalog"),
+    deck: document.getElementById("view-deck"),
+    study: document.getElementById("view-study"),
+    focus: document.getElementById("view-focus"),
+    ledger: document.getElementById("view-ledger"),
+  };
+  const deskNavBtns = document.querySelectorAll("#deskNav .drawer-btn");
+  const mobileNavBtns = document.querySelectorAll("#mobileNav button");
+
+  let currentDeckId = null;
+
+  function showView(name){
+    Object.entries(views).forEach(([k,el])=> el.classList.toggle("active", k===name));
+    [...deskNavBtns,...mobileNavBtns].forEach(b=>{
+      if(b.dataset.view === name) b.setAttribute("aria-current","page");
+      else b.removeAttribute("aria-current");
+    });
+    if(name === "catalog") renderCatalog();
+    if(name === "study") renderStudy();
+    if(name === "focus") renderSessionLog();
+    if(name === "ledger") renderLedger();
+    window.scrollTo({top:0, behavior:"auto"});
+  }
+
+  [...deskNavBtns,...mobileNavBtns].forEach(btn=>{
+    btn.addEventListener("click", ()=> showView(btn.dataset.view));
+  });
+
+  document.getElementById("backToCatalog").addEventListener("click", ()=> showView("catalog"));
+
+  /* ============ catalog / decks ============ */
+  const deckGrid = document.getElementById("deckGrid");
+
+  function dueCountForDeck(deckId){
+    return state.cards.filter(c=> c.deckId===deckId && isDue(c)).length;
+  }
+  function totalDueCount(){
+    return state.cards.filter(isDue).length;
+  }
+
+  function renderCatalog(){
+    deckGrid.innerHTML = "";
+    state.decks.forEach(deck=>{
+      const total = state.cards.filter(c=>c.deckId===deck.id).length;
+      const due = dueCountForDeck(deck.id);
+      const el = document.createElement("button");
+      el.className = "card deck-card";
+      el.innerHTML = `
+        <div class="deck-top">
+          <div>
+            <div class="deck-name">${escapeHtml(deck.name)}</div>
+            <div class="deck-tab">DRAWER ${deck.id.slice(0,4).toUpperCase()}</div>
+          </div>
+        </div>
+        <div class="deck-stats"><span><b>${total}</b> card${total===1?"":"s"}</span></div>
+        <span class="due-badge ${due===0?"zero":""}">${due===0 ? "all caught up" : due + " due"}</span>
+      `;
+      el.addEventListener("click", ()=> openDeck(deck.id));
+      deckGrid.appendChild(el);
+    });
+    const addEl = document.createElement("button");
+    addEl.className = "new-deck-card";
+    addEl.textContent = "+ New deck";
+    addEl.addEventListener("click", ()=> openDeckDialog());
+    deckGrid.appendChild(addEl);
+
+    updateDueBadges();
+  }
+
+  function updateDueBadges(){
+    document.getElementById("deskDueCount").textContent = totalDueCount();
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+  }
+
+  /* deck dialog */
+  const deckDialog = document.getElementById("deckDialog");
+  const deckForm = document.getElementById("deckForm");
+  const deckNameInput = document.getElementById("deckNameInput");
+  function openDeckDialog(){
+    deckNameInput.value = "";
+    deckDialog.showModal();
+    deckNameInput.focus();
+  }
+  deckForm.addEventListener("submit", (e)=>{
+    e.preventDefault();
+    const name = deckNameInput.value.trim();
+    if(!name) return;
+    state.decks.push({ id: uid(), name });
+    save();
+    deckDialog.close();
+    renderCatalog();
+    toast("Deck added");
+  });
+
+  /* ============ deck detail ============ */
+  const cardListEl = document.getElementById("cardList");
+
+  function openDeck(deckId){
+    currentDeckId = deckId;
+    const deck = state.decks.find(d=>d.id===deckId);
+    document.getElementById("deck-h").textContent = deck.name;
+    const due = dueCountForDeck(deckId);
+    document.getElementById("deck-sub").textContent =
+      `${state.cards.filter(c=>c.deckId===deckId).length} card(s) in this deck · ${due} due for review today.`;
+    renderCardList();
+    showViewRaw("deck");
+  }
+  function showViewRaw(name){
+    Object.entries(views).forEach(([k,el])=> el.classList.toggle("active", k===name));
+  }
+
+  function renderCardList(){
+    const cards = state.cards.filter(c=>c.deckId===currentDeckId);
+    if(cards.length===0){
+      cardListEl.innerHTML = `<div class="empty">This deck is empty. Add a card, or paste a list to get started.</div>`;
+      return;
+    }
+    cardListEl.innerHTML = "";
+    cards.forEach(card=>{
+      const row = document.createElement("div");
+      row.className = "card-row";
+      const dueLabel = isDue(card) ? "due now" : `due ${card.due}`;
+      row.innerHTML = `
+        <div class="txts">
+          <div class="front">${escapeHtml(card.front)}</div>
+          <div class="back">${escapeHtml(card.back)}</div>
+        </div>
+        <div class="meta">${dueLabel}</div>
+        <button class="icon-btn" title="Delete card" aria-label="Delete card">✕</button>
+      `;
+      row.querySelector(".icon-btn").addEventListener("click", ()=>{
+        state.cards = state.cards.filter(c=>c.id!==card.id);
+        save();
+        renderCardList();
+        openDeck(currentDeckId);
+      });
+      cardListEl.appendChild(row);
+    });
+  }
+
+  document.getElementById("deleteDeckBtn").addEventListener("click", ()=>{
+    const deck = state.decks.find(d=>d.id===currentDeckId);
+    if(!deck) return;
+    if(!confirm(`Delete "${deck.name}" and all of its cards? This can't be undone.`)) return;
+    state.decks = state.decks.filter(d=>d.id!==currentDeckId);
+    state.cards = state.cards.filter(c=>c.deckId!==currentDeckId);
+    save();
+    showView("catalog");
+    toast("Deck deleted");
+  });
+
+  document.getElementById("studyThisDeck").addEventListener("click", ()=>{
+    studyFilterDeckId = currentDeckId;
+    showView("study");
+  });
+
+  /* card dialog */
+  const cardDialog = document.getElementById("cardDialog");
+  const cardForm = document.getElementById("cardForm");
+  const cardFrontInput = document.getElementById("cardFrontInput");
+  const cardBackInput = document.getElementById("cardBackInput");
+
+  document.getElementById("openAddCard").addEventListener("click", ()=>{
+    cardFrontInput.value = ""; cardBackInput.value = "";
+    cardDialog.showModal();
+    cardFrontInput.focus();
+  });
+  cardForm.addEventListener("submit", (e)=>{
+    e.preventDefault();
+    const front = cardFrontInput.value.trim();
+    const back = cardBackInput.value.trim();
+    if(!front || !back) return;
+    state.cards.push({ id: uid(), deckId: currentDeckId, front, back, repetition:0, ease:2.5, interval:0, due: todayStr() });
+    save();
+    cardDialog.close();
+    openDeck(currentDeckId);
+    toast("Card added");
+  });
+
+  /* bulk import */
+  const bulkDialog = document.getElementById("bulkDialog");
+  const bulkForm = document.getElementById("bulkForm");
+  const bulkInput = document.getElementById("bulkInput");
+  document.getElementById("openBulkImport").addEventListener("click", ()=>{
+    bulkInput.value = "";
+    bulkDialog.showModal();
+    bulkInput.focus();
+  });
+  bulkForm.addEventListener("submit", (e)=>{
+    e.preventDefault();
+    const lines = bulkInput.value.split("\n").map(l=>l.trim()).filter(Boolean);
+    let added = 0;
+    lines.forEach(line=>{
+      const parts = line.split(/\t|::|\|/).map(s=>s.trim()).filter(Boolean);
+      if(parts.length>=2){
+        state.cards.push({ id: uid(), deckId: currentDeckId, front: parts[0], back: parts.slice(1).join(" — "), repetition:0, ease:2.5, interval:0, due: todayStr() });
+        added++;
+      }
+    });
+    save();
+    bulkDialog.close();
+    openDeck(currentDeckId);
+    toast(added ? `Imported ${added} card${added===1?"":"s"}` : "No valid lines found — use | or :: between front and back");
+  });
+
+  /* close buttons for all dialogs */
+  document.querySelectorAll("dialog [data-close]").forEach(btn=>{
+    btn.addEventListener("click", ()=> btn.closest("dialog").close());
+  });
+
+  /* ============ study session ============ */
+  const studyArea = document.getElementById("studyArea");
+  let studyFilterDeckId = null;
+  let queue = [];
+  let queueIndex = 0;
+  let sessionStats = { total:0, correct:0 };
+
+  function renderStudy(){
+    queue = state.cards.filter(c=> isDue(c) && (!studyFilterDeckId || c.deckId===studyFilterDeckId));
+    queue.sort((a,b)=> (a.due||"").localeCompare(b.due||""));
+    queueIndex = 0;
+    sessionStats = { total: queue.length, correct: 0 };
+    document.getElementById("study-sub").textContent = studyFilterDeckId
+      ? `Studying "${state.decks.find(d=>d.id===studyFilterDeckId)?.name || ""}" · ${queue.length} due`
+      : `Cards due for review, oldest first · ${queue.length} due`;
+    renderStudyCard();
+  }
+
+  function renderStudyCard(){
+    if(queue.length===0){
+      studyArea.innerHTML = `<div class="empty card" style="padding:60px 20px;">Nothing due right now. Add more cards, or come back later — Marginalia will bring them back when they're due.</div>`;
+      return;
+    }
+    if(queueIndex >= queue.length){
+      const pct = sessionStats.total ? Math.round(100*sessionStats.correct/sessionStats.total) : 100;
+      studyArea.innerHTML = `
+        <div class="session-done card">
+          <div class="big">📇</div>
+          <h2 style="margin:0 0 6px;">Session complete</h2>
+          <p style="color:var(--ink-soft); margin:0 0 18px;">You reviewed ${sessionStats.total} card${sessionStats.total===1?"":"s"} · ${pct}% remembered well</p>
+          <button class="btn" id="backToCatalogFromStudy">Back to catalog</button>
+        </div>`;
+      document.getElementById("backToCatalogFromStudy").addEventListener("click", ()=>{ studyFilterDeckId=null; showView("catalog"); });
+      return;
+    }
+    const card = queue[queueIndex];
+    studyArea.innerHTML = `
+      <div class="study-wrap">
+        <div class="study-progress"><span>Card ${queueIndex+1} of ${queue.length}</span><span>${state.decks.find(d=>d.id===card.deckId)?.name || ""}</span></div>
+        <div class="flip-card" id="flipCard" tabindex="0" role="button" aria-label="Flashcard, press space or enter to reveal the answer">
+          <div class="flip-inner">
+            <div class="face front"><span class="tag">FRONT</span><span>${escapeHtml(card.front)}</span></div>
+            <div class="face back"><span class="tag">BACK</span><span>${escapeHtml(card.back)}</span></div>
+          </div>
+        </div>
+        <div class="flip-hint" id="flipHint">tap the card, or press space, to reveal the answer</div>
+        <div class="rate-row" id="rateRow" style="visibility:hidden;">
+          <button class="rate-btn rate-again" data-q="0">Again<small>&lt; 1 day</small></button>
+          <button class="rate-btn rate-hard" data-q="3">Hard<small>shorter</small></button>
+          <button class="rate-btn rate-good" data-q="4">Good<small>on schedule</small></button>
+          <button class="rate-btn rate-easy" data-q="5">Easy<small>longer</small></button>
+        </div>
+      </div>
+    `;
+    const flipCard = document.getElementById("flipCard");
+    const rateRow = document.getElementById("rateRow");
+    const flipHint = document.getElementById("flipHint");
+    let flipped = false;
+    function doFlip(){
+      if(flipped) return;
+      flipped = true;
+      flipCard.classList.add("flipped");
+      rateRow.style.visibility = "visible";
+      flipHint.textContent = "how well did you remember it?";
+    }
+    flipCard.addEventListener("click", doFlip);
+    flipCard.addEventListener("keydown", (e)=>{
+      if(e.code==="Space" || e.code==="Enter"){ e.preventDefault(); doFlip(); }
+    });
+    rateRow.querySelectorAll(".rate-btn").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const q = Number(btn.dataset.q);
+        schedule(card, q);
+        state.reviewLog.push({ date: todayStr(), quality: q });
+        if(q>=3) sessionStats.correct++;
+        save();
+        queueIndex++;
+        renderStudyCard();
+        updateDueBadges();
+      });
+    });
+  }
+
+  /* ============ focus timer ============ */
+  let timerTotal = 25*60;
+  let timerLeft = timerTotal;
+  let timerMode = "focus"; // focus | short | long
+  let timerRunning = false;
+  let timerInterval = null;
+  let focusSessionsSinceLong = 0;
+
+  const timerDigits = document.getElementById("timerDigits");
+  const timerModeEl = document.getElementById("timerMode");
+  const timerArc = document.getElementById("timerArc");
+  const ARC_LEN = 2*Math.PI*118;
+
+  function fmt(t){
+    const m = Math.floor(t/60).toString().padStart(2,"0");
+    const s = Math.floor(t%60).toString().padStart(2,"0");
+    return `${m}:${s}`;
+  }
+  function modeMinutes(mode){
+    const s = state.settings;
+    return mode==="focus" ? s.work : (mode==="short" ? s.short : s.long);
+  }
+  function refreshTimerUI(){
+    timerDigits.textContent = fmt(timerLeft);
+    timerModeEl.textContent = timerMode==="focus" ? "focus session" : (timerMode==="short" ? "short break" : "long break");
+    const frac = timerLeft/timerTotal;
+    timerArc.setAttribute("stroke-dasharray", ARC_LEN);
+    timerArc.setAttribute("stroke-dashoffset", ARC_LEN*(1-frac));
+    document.getElementById("timerStart").textContent = timerRunning ? "Pause" : "Start";
+  }
+
+  function beep(){
+    try{
+      const ctx = new (window.AudioContext||window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 660;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.5);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime+0.5);
+    }catch(e){ /* audio not available, ignore */ }
+  }
+
+  function completeTimerSegment(){
+    if(timerMode==="focus"){
+      const mins = modeMinutes("focus");
+      state.focusLog.push({ date: todayStr(), minutes: mins });
+      save();
+      renderSessionLog();
+      focusSessionsSinceLong++;
+      timerMode = (focusSessionsSinceLong % 4 === 0) ? "long" : "short";
+    } else {
+      timerMode = "focus";
+    }
+    timerTotal = modeMinutes(timerMode)*60;
+    timerLeft = timerTotal;
+    beep();
+    toast(timerMode==="focus" ? "Break's over — back to focus" : "Nice work — take a break");
+    refreshTimerUI();
+  }
+
+  function tick(){
+    timerLeft--;
+    if(timerLeft<=0){
+      completeTimerSegment();
+    }
+    refreshTimerUI();
+  }
+
+  document.getElementById("timerStart").addEventListener("click", ()=>{
+    timerRunning = !timerRunning;
+    if(timerRunning){
+      timerInterval = setInterval(tick, 1000);
+    } else {
+      clearInterval(timerInterval);
+    }
+    refreshTimerUI();
+  });
+  document.getElementById("timerReset").addEventListener("click", ()=>{
+    timerRunning = false;
+    clearInterval(timerInterval);
+    timerTotal = modeMinutes(timerMode)*60;
+    timerLeft = timerTotal;
+    refreshTimerUI();
+  });
+  document.getElementById("timerSkip").addEventListener("click", ()=>{
+    timerRunning = false;
+    clearInterval(timerInterval);
+    completeTimerSegment();
+  });
+
+  ["workMin","breakMin","longBreakMin"].forEach((id, i)=>{
+    const key = ["work","short","long"][i];
+    const input = document.getElementById(id);
+    input.value = state.settings[key];
+    input.addEventListener("change", ()=>{
+      let v = Math.max(1, Math.min(180, Number(input.value)||1));
+      input.value = v;
+      state.settings[key] = v;
+      save();
+      if(timerMode===key || (key==="work" && timerMode==="focus")){
+        if(!timerRunning){ timerTotal = modeMinutes(timerMode)*60; timerLeft = timerTotal; refreshTimerUI(); }
+      }
+    });
+  });
+
+  function renderSessionLog(){
+    const today = todayStr();
+    const todays = state.focusLog.filter(f=>f.date===today);
+    const list = document.getElementById("sessionLog");
+    if(todays.length===0){
+      list.innerHTML = `<div class="empty" style="padding:20px 4px;">No completed sessions yet today.</div>`;
+      return;
+    }
+    list.innerHTML = todays.map((s,i)=>`<div class="log-row"><span>Session ${i+1}</span><span>${s.minutes} min</span></div>`).join("");
+  }
+
+  timerTotal = modeMinutes("focus")*60;
+  timerLeft = timerTotal;
+  refreshTimerUI();
+
+  /* ============ ledger ============ */
+  function computeStreak(){
+    const days = new Set(state.reviewLog.map(r=>r.date));
+    let streak = 0;
+    let cursor = new Date();
+    if(!days.has(todayStr(cursor))){
+      cursor.setDate(cursor.getDate()-1);
+      if(!days.has(todayStr(cursor))) return 0;
+    }
+    while(days.has(todayStr(cursor))){
+      streak++;
+      cursor.setDate(cursor.getDate()-1);
+    }
+    return streak;
+  }
+
+  function lastNDays(n){
+    const arr = [];
+    for(let i=n-1;i>=0;i--){
+      const d = new Date();
+      d.setDate(d.getDate()-i);
+      arr.push(d);
+    }
+    return arr;
+  }
+
+  function renderLedger(){
+    const totalCards = state.cards.length;
+    const due = totalDueCount();
+    const streak = computeStreak();
+    const totalReviews = state.reviewLog.length;
+    const accuracy = totalReviews ? Math.round(100*state.reviewLog.filter(r=>r.quality>=3).length/totalReviews) : 0;
+
+    document.getElementById("statGrid").innerHTML = `
+      <div class="card stat-card"><div class="num">${totalCards}</div><div class="lbl">total cards</div></div>
+      <div class="card stat-card"><div class="num">${due}</div><div class="lbl">due today</div></div>
+      <div class="card stat-card"><div class="num">${streak}</div><div class="lbl">day streak</div></div>
+      <div class="card stat-card"><div class="num">${accuracy}%</div><div class="lbl">remembered well</div></div>
+    `;
+
+    const days = lastNDays(14);
+    const reviewCounts = days.map(d=> state.reviewLog.filter(r=>r.date===todayStr(d)).length);
+    const focusMins = days.map(d=> state.focusLog.filter(f=>f.date===todayStr(d)).reduce((a,b)=>a+b.minutes,0));
+    const maxReview = Math.max(1, ...reviewCounts);
+    const maxFocus = Math.max(1, ...focusMins);
+
+    document.getElementById("reviewBars").innerHTML = days.map((d,i)=>`
+      <div class="bar-col">
+        <div class="bar" style="height:${Math.max(2, 100*reviewCounts[i]/maxReview)}%" title="${reviewCounts[i]} reviews"></div>
+        <div class="day-lbl">${d.getDate()}</div>
+      </div>`).join("");
+
+    document.getElementById("focusBars").innerHTML = days.map((d,i)=>`
+      <div class="bar-col">
+        <div class="bar" style="height:${Math.max(2, 100*focusMins[i]/maxFocus)}%; background:var(--leaf);" title="${focusMins[i]} minutes"></div>
+        <div class="day-lbl">${d.getDate()}</div>
+      </div>`).join("");
+  }
+
+  /* ============ backup / restore ============ */
+  function doExport(){
+    const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `marginalia-backup-${todayStr()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Backup downloaded");
+  }
+  document.getElementById("exportBtn").addEventListener("click", doExport);
+  document.getElementById("exportBtnRail").addEventListener("click", doExport);
+
+  const importFile = document.getElementById("importFile");
+  function triggerImport(){ importFile.click(); }
+  document.getElementById("importBtn").addEventListener("click", triggerImport);
+  document.getElementById("importBtnRail").addEventListener("click", triggerImport);
+  importFile.addEventListener("change", ()=>{
+    const file = importFile.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const parsed = JSON.parse(reader.result);
+        if(!parsed.decks || !parsed.cards) throw new Error("not a valid backup");
+        state = Object.assign(defaultState(), parsed);
+        save();
+        showView("catalog");
+        toast("Backup restored");
+      }catch(e){
+        toast("That file doesn't look like a Marginalia backup");
+      }
+    };
+    reader.readAsText(file);
+    importFile.value = "";
+  });
+
+  document.getElementById("resetAllBtn").addEventListener("click", ()=>{
+    if(!confirm("Erase every deck, card, and log? This cannot be undone.")) return;
+    state = defaultState();
+    save();
+    showView("catalog");
+    toast("All data erased");
+  });
+
+  /* ============ seed a starter deck on first run ============ */
+  if(state.decks.length===0){
+    const deckId = uid();
+    state.decks.push({ id: deckId, name: "Welcome to Marginalia" });
+    state.cards.push(
+      { id: uid(), deckId, front: "What algorithm schedules these reviews?", back: "SM-2 — it spaces each card out further every time you remember it well.", repetition:0, ease:2.5, interval:0, due: todayStr() },
+      { id: uid(), deckId, front: "How do I add my own cards?", back: "Open a deck, then use \"Add card\" or \"Paste a list\" to bring in many at once.", repetition:0, ease:2.5, interval:0, due: todayStr() },
+      { id: uid(), deckId, front: "Where is my data stored?", back: "Only in this browser's local storage. Export a backup any time from the Ledger tab.", repetition:0, ease:2.5, interval:0, due: todayStr() }
+    );
+    save();
+  }
+
+  renderCatalog();
+  updateDueBadges();
+})();
+</script>
+</body>
+</html>
